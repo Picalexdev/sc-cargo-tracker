@@ -2,7 +2,9 @@
 ; Wraps the PyInstaller bundle and silently downloads + installs Tesseract OCR.
 
 #define AppName    "SC Cargo Tracker"
-#define AppVersion "1.0.0"
+#ifndef AppVersion
+  #define AppVersion "1.0.0"
+#endif
 #define AppExe     "SC Cargo Tracker.exe"
 #define TessURL    "https://github.com/UB-Mannheim/tesseract/releases/download/v5.5.0.20241111/tesseract-ocr-w64-setup-5.5.0.20241111.exe"
 

@@ -377,6 +377,11 @@ def end_run(entries: list[dict]) -> None:
 
 # ── history ────────────────────────────────────────────────────────────────────
 
+def delete_run(run_id: int):
+    with _conn() as con:
+        con.execute("DELETE FROM runs WHERE id = ?", (run_id,))
+
+
 def get_history() -> dict:
     with _conn() as con:
         runs = [dict(r) for r in con.execute(

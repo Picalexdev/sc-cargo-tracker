@@ -29,6 +29,7 @@ const api = {
   clearMissions()                      { return this._fetch("DELETE", "/api/missions"); },
   deleteMission(id)                    { return this._fetch("DELETE", `/api/missions/${id}`); },
   endRun(entries)                      { return this._fetch("POST",   "/api/missions/end-run", { entries }); },
+  deleteRun(id)                        { return this._fetch("DELETE", `/api/runs/${id}`); },
   applyOcr(data)                       { return this._fetch("POST",   "/api/ocr/apply",        data); },
   getAliases()                         { return this._fetch("GET",    "/api/aliases"); },
   addAlias(alias, destId)              { return this._fetch("POST",   "/api/aliases",           { alias, dest_id: destId }); },
@@ -1049,8 +1050,28 @@ function buildRunCard(run, runNum) {
 
   const chevron = el("div", { className: "run-chevron" }, [text("▼")]);
 
+  const delBtn = el("button", { className: "run-delete-btn", title: "Delete this run" }, [text("✕")]);
+  delBtn.onclick = async (e) => {
+    e.stopPropagation();
+    if (!confirm(`Delete Run #${runNum} (${dateStr})?\n\nThis cannot be undone.`)) return;
+    try {
+      await api.deleteRun(run.id);
+      state.history = null;
+      render();
+      state.historyLoading = true;
+      render();
+      try { state.history = await api.getHistory(); } catch (err) { state.error = err.message; }
+      state.historyLoading = false;
+      render();
+    } catch (err) {
+      state.error = `Failed to delete run: ${err.message}`;
+      render();
+    }
+  };
+
   header.appendChild(dateEl);
   header.appendChild(statsEl);
+  header.appendChild(delBtn);
   header.appendChild(chevron);
   card.appendChild(header);
 

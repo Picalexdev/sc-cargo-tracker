@@ -818,6 +818,24 @@ tbody td.cell-dest { padding: .4rem .75rem; }
 .run-stat strong { color: var(--text); font-weight: 700; }
 .run-stat strong.amber { color: var(--amber); }
 
+.run-delete-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: .85rem;
+  padding: .2rem .35rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+  opacity: .5;
+  transition: color .15s, opacity .15s, background .15s;
+}
+.run-delete-btn:hover {
+  color: #e05c5c;
+  opacity: 1;
+  background: rgba(224, 92, 92, .12);
+}
+
 .run-chevron {
   color: var(--text-muted);
   font-size: .8rem;

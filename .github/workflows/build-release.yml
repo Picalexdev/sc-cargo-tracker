@@ -40,6 +40,9 @@ jobs:
             --windowed `
             "--add-data=frontend;frontend" `
             --paths backend `
+            --collect-all pywebview `
+            --hidden-import webview.platforms.winforms `
+            --hidden-import webview.platforms.chromium `
             --hidden-import uvicorn.logging `
             --hidden-import uvicorn.loops `
             --hidden-import uvicorn.loops.auto `
@@ -64,8 +67,16 @@ jobs:
             --exclude-module sklearn `
             run.py
 
+      - name: Get version
+        id: ver
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = $tag -replace '^v', ''
+          if (-not $ver) { $ver = "1.0.0" }
+          echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
+
       - name: Build installer
-        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss'
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.ver.outputs.VERSION }} setup.iss'
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

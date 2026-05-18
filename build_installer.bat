@@ -5,7 +5,7 @@ echo ============================================================
 echo.
 
 echo [1/3] Installing Python build dependencies...
-pip install pyinstaller pywebview pytesseract pillow rapidfuzz --quiet
+pip install pyinstaller pywebview pytesseract pillow rapidfuzz fastapi "uvicorn[standard]" python-multipart pydantic --quiet
 if errorlevel 1 (
   echo ERROR: pip install failed.
   pause
@@ -22,6 +22,9 @@ pyinstaller ^
   --windowed ^
   --add-data "frontend;frontend" ^
   --paths "backend" ^
+  --collect-all "pywebview" ^
+  --hidden-import "webview.platforms.winforms" ^
+  --hidden-import "webview.platforms.chromium" ^
   --hidden-import "uvicorn.logging" ^
   --hidden-import "uvicorn.loops" ^
   --hidden-import "uvicorn.loops.auto" ^

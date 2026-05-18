@@ -121,6 +121,11 @@ def set_quantity(dest_id: int, mat_id: int, data: QuantitySet):
 def get_history():
     return database.get_history()
 
+@app.delete("/api/runs/{run_id}")
+def delete_run(run_id: int):
+    database.delete_run(run_id)
+    return {"ok": True}
+
 
 @app.get("/api/missions")
 def get_missions():
