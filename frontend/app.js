@@ -30,6 +30,8 @@ const api = {
   deleteMission(id)                    { return this._fetch("DELETE", `/api/missions/${id}`); },
   endRun(entries)                      { return this._fetch("POST",   "/api/missions/end-run", { entries }); },
   deleteRun(id)                        { return this._fetch("DELETE", `/api/runs/${id}`); },
+  reorderMaterials(ids)                { return this._fetch("PUT", "/api/materials/reorder",    { ids }); },
+  reorderDestinations(ids)             { return this._fetch("PUT", "/api/destinations/reorder", { ids }); },
   applyOcr(data)                       { return this._fetch("POST",   "/api/ocr/apply",        data); },
   getAliases()                         { return this._fetch("GET",    "/api/aliases"); },
   addAlias(alias, destId)              { return this._fetch("POST",   "/api/aliases",           { alias, dest_id: destId }); },
@@ -46,6 +48,115 @@ const api = {
     return res.json();
   },
 };
+
+// ── drag & drop ────────────────────────────────────────────────────────────────
+
+const _drag = { type: null, id: null };
+
+function _reorderIds(type, fromId, toId) {
+  const items = type === "material" ? state.materials : state.destinations;
+  const ids = items.map(x => x.id);
+  const fi = ids.indexOf(fromId), ti = ids.indexOf(toId);
+  if (fi === -1 || ti === -1 || fi === ti) return null;
+  ids.splice(fi, 1);
+  ids.splice(ti, 0, fromId);
+  return ids;
+}
+
+async function _applyReorder(type, ids) {
+  try {
+    if (type === "material") await api.reorderMaterials(ids);
+    else await api.reorderDestinations(ids);
+    await reload();
+  } catch (err) { flashError(err.message); }
+}
+
+function makeDraggable(itemEl, type, id) {
+  itemEl.draggable = true;
+  itemEl.addEventListener("dragstart", e => {
+    _drag.type = type; _drag.id = id;
+    itemEl.classList.add("is-dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", "");   // required by Firefox
+  });
+  itemEl.addEventListener("dragend", () => {
+    _drag.type = null; _drag.id = null;
+    itemEl.classList.remove("is-dragging");
+    document.querySelectorAll(".drag-over").forEach(x => x.classList.remove("drag-over"));
+  });
+  itemEl.addEventListener("dragover", e => {
+    if (_drag.type !== type) return;
+    e.preventDefault();
+    document.querySelectorAll(".drag-over").forEach(x => x.classList.remove("drag-over"));
+    itemEl.classList.add("drag-over");
+  });
+  itemEl.addEventListener("dragleave", e => {
+    if (!itemEl.contains(e.relatedTarget)) itemEl.classList.remove("drag-over");
+  });
+  itemEl.addEventListener("drop", async e => {
+    e.preventDefault();
+    itemEl.classList.remove("drag-over");
+    if (_drag.id === id || _drag.type !== type) return;
+    const ids = _reorderIds(type, _drag.id, id);
+    if (ids) await _applyReorder(type, ids);
+  });
+}
+
+// ── cell tooltip (mission sources) ─────────────────────────────────────────────
+
+function computeCardSources() {
+  const sources = {};  // { destId: { matId: [{num, qty, pct}] } }
+  state.missions.forEach((mission, idx) => {
+    const pct = state.missionPcts[mission.id] ?? 100;
+    for (const d of mission.deliveries) {
+      if (!d.dest_id || !d.mat_id) continue;
+      const dk = String(d.dest_id), mk = String(d.mat_id);
+      if (!sources[dk]) sources[dk] = {};
+      if (!sources[dk][mk]) sources[dk][mk] = [];
+      sources[dk][mk].push({ num: idx + 1, qty: Math.ceil(d.quantity * pct / 100), pct });
+    }
+  });
+  return sources;
+}
+
+let _cellTip = null;
+function getCellTip() {
+  if (!_cellTip) {
+    _cellTip = document.createElement("div");
+    _cellTip.className = "cell-tooltip";
+    document.body.appendChild(_cellTip);
+  }
+  return _cellTip;
+}
+
+function setupCellTooltip(td) {
+  td.addEventListener("mouseenter", () => {
+    const src = computeCardSources()[td.dataset.destId]?.[td.dataset.matId];
+    if (!src || !src.length) return;
+    const tip = getCellTip();
+    tip.innerHTML = "";
+    src.forEach(s => {
+      const row = document.createElement("div");
+      row.className = "tooltip-row";
+      row.innerHTML =
+        `<span class="tooltip-mission">Mission ${s.num}</span>` +
+        (s.pct < 100 ? `<span class="tooltip-pct">${s.pct}%</span>` : "") +
+        `<span class="tooltip-qty">${s.qty} SCU</span>`;
+      tip.appendChild(row);
+    });
+    const rect = td.getBoundingClientRect();
+    const left = Math.min(rect.left, window.innerWidth - 180);
+    const top  = rect.bottom + 4 < window.innerHeight - 80
+      ? rect.bottom + 4
+      : rect.top - tip.offsetHeight - 4;
+    tip.style.left = left + "px";
+    tip.style.top  = top  + "px";
+    tip.classList.add("visible");
+  });
+  td.addEventListener("mouseleave", () => {
+    if (_cellTip) _cellTip.classList.remove("visible");
+  });
+}
 
 // ── state ──────────────────────────────────────────────────────────────────────
 
@@ -88,8 +199,8 @@ function render() {
     const listsRow = el("div", { className: "lists-row" });
     listsRow.appendChild(buildMaterialsSection());
     listsRow.appendChild(buildDestinationsSection());
+    listsRow.appendChild(buildAliasesSection());
     $app.appendChild(listsRow);
-    $app.appendChild(buildAliasesSection());
   } else {
     $app.appendChild(buildHistoryTab());
   }
@@ -147,10 +258,12 @@ function buildMaterialsSection() {
     const list = el("div", { className: "material-list" });
     for (const mat of state.materials) {
       const item = el("div", { className: "material-item" });
-      item.appendChild(el("span", {}, [text(mat.name)]));
+      item.appendChild(el("span", { className: "drag-handle", title: "Drag to reorder" }, [text("⣿")]));
+      item.appendChild(el("span", { style: "flex:1" }, [text(mat.name)]));
       const del = el("button", { className: "btn-danger", title: `Remove ${mat.name}` }, [text("×")]);
       del.onclick = () => removeMaterial(mat.id);
       item.appendChild(del);
+      makeDraggable(item, "material", mat.id);
       list.appendChild(item);
     }
     section.appendChild(list);
@@ -242,7 +355,11 @@ function buildTable() {
   const headRow = el("tr");
   headRow.appendChild(el("th", { className: "col-dest" }, [text("Destination")]));
   for (const mat of state.materials) {
-    headRow.appendChild(el("th", {}, [text(mat.name)]));
+    const th = el("th", { className: "col-mat", title: "Drag to reorder columns" });
+    th.appendChild(el("span", { className: "drag-handle th-drag-handle" }, [text("⣿")]));
+    th.appendChild(text(mat.name));
+    makeDraggable(th, "material", mat.id);
+    headRow.appendChild(th);
   }
   headRow.appendChild(el("th", { className: "col-total" }, [text("Total SCU")]));
   thead.appendChild(headRow);
@@ -257,8 +374,10 @@ function buildTable() {
 function buildDestRow(dest, cardMatrix) {
   const tr = el("tr", { "data-dest-id": dest.id });
 
-  const nameTd = el("td", { className: "cell-dest" });
-  nameTd.textContent = dest.name;
+  const nameTd = el("td", { className: "cell-dest", title: "Drag to reorder rows" });
+  nameTd.appendChild(el("span", { className: "drag-handle row-drag-handle" }, [text("⣿")]));
+  nameTd.appendChild(text(dest.name));
+  makeDraggable(nameTd, "destination", dest.id);
   tr.appendChild(nameTd);
 
   let rowTotal = 0;
@@ -272,6 +391,7 @@ function buildDestRow(dest, cardMatrix) {
     });
     td.textContent = qty != null ? String(qty) : "—";
     if (qty != null) { rowTotal += qty; rowHasAny = true; }
+    setupCellTooltip(td);
     tr.appendChild(td);
   }
 
@@ -1147,6 +1267,7 @@ function buildDestinationsSection() {
     const list = el("div", { className: "material-list" });
     for (const dest of state.destinations) {
       const item = el("div", { className: "material-item" });
+      item.appendChild(el("span", { className: "drag-handle", title: "Drag to reorder" }, [text("⣿")]));
       const nameInput = el("input", { type: "text", className: "dest-name-input", value: dest.name });
       nameInput.onblur = async () => {
         const name = nameInput.value.trim();
@@ -1159,6 +1280,7 @@ function buildDestinationsSection() {
       const del = el("button", { className: "btn-danger", title: `Remove ${dest.name}` }, [text("×")]);
       del.onclick = () => removeDestination(dest.id);
       item.appendChild(del);
+      makeDraggable(item, "destination", dest.id);
       list.appendChild(item);
     }
     section.appendChild(list);
@@ -1208,12 +1330,9 @@ function copyAsTable() {
 function buildAliasesSection() {
   const section = el("section");
 
-  const headRow = el("div", { style: "display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:.3rem;" });
-  headRow.appendChild(el("h2", { style: "margin-bottom:0;" }, [text("Destination Aliases")]));
-  section.appendChild(headRow);
-
-  section.appendChild(el("p", { style: "font-size:.78rem;color:var(--text-muted);margin-bottom:.75rem;" }, [
-    text("Substring rules for OCR: if an alias appears in a destination phrase, it maps to the target."),
+  section.appendChild(el("h2", {}, [text("Aliases")]));
+  section.appendChild(el("p", { className: "section-subtitle" }, [
+    text("OCR substring → destination mappings"),
   ]));
 
   if (state.aliases.length > 0) {
@@ -1344,7 +1463,34 @@ document.addEventListener("paste", (e) => {
   }
 });
 
+// ── version check ─────────────────────────────────────────────────────────────
+
+async function checkForUpdate() {
+  try {
+    const data = await api._fetch("GET", "/api/version");
+    if (data.update_available) showUpdateBanner(data.latest, data.release_url);
+  } catch (_) {}
+}
+
+function showUpdateBanner(version, url) {
+  if (document.getElementById("update-banner")) return;
+  const banner = el("div", { id: "update-banner", className: "update-banner" });
+  const msg = el("span", {}, [text(`Version ${version} is available`)]);
+  const dlBtn = el("a", {
+    className: "update-banner-dl",
+    href: url || "#",
+    target: "_blank",
+    rel: "noopener",
+    textContent: "Download",
+  });
+  const closeBtn = el("button", { className: "update-banner-close", textContent: "✕" });
+  closeBtn.addEventListener("click", () => banner.remove());
+  banner.append(msg, dlBtn, closeBtn);
+  document.body.insertBefore(banner, document.body.firstChild);
+}
+
 // ── init ───────────────────────────────────────────────────────────────────────
 
 $app.innerHTML = `<div style="padding:2rem;color:var(--text-muted)">Loading…</div>`;
 reload();
+checkForUpdate();

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json as _json
 import sys
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -11,6 +13,7 @@ from pydantic import BaseModel
 
 import database
 import ocr
+from version import VERSION
 
 app = FastAPI(title="SC Cargo Resource Tracker")
 
@@ -59,6 +62,9 @@ class OCRApply(BaseModel):
     materials: list[dict]
     new_materials: list[str]
 
+class ReorderRequest(BaseModel):
+    ids: list[int]
+
 class AliasCreate(BaseModel):
     alias: str
     dest_id: int
@@ -83,6 +89,11 @@ def add_material(data: MaterialCreate):
     except ValueError as exc:
         raise HTTPException(409, str(exc))
 
+@app.put("/api/materials/reorder")
+def reorder_materials(data: ReorderRequest):
+    database.reorder_materials(data.ids)
+    return {"ok": True}
+
 @app.delete("/api/materials/{mat_id}")
 def delete_material(mat_id: int):
     database.delete_material(mat_id)
@@ -95,6 +106,11 @@ def delete_material(mat_id: int):
 def add_destination(data: DestinationCreate):
     name = data.name.strip() or "New Destination"
     return database.add_destination(name)
+
+@app.put("/api/destinations/reorder")
+def reorder_destinations(data: ReorderRequest):
+    database.reorder_destinations(data.ids)
+    return {"ok": True}
 
 @app.put("/api/destinations/{dest_id}")
 def update_destination(dest_id: int, data: DestinationUpdate):
@@ -116,6 +132,31 @@ def set_quantity(dest_id: int, mat_id: int, data: QuantitySet):
 
 
 # ── missions ───────────────────────────────────────────────────────────────────
+
+@app.get("/api/version")
+def get_version():
+    result = {"current": VERSION, "latest": None, "update_available": False, "release_url": None}
+    try:
+        req = urllib.request.Request(
+            "https://api.github.com/repos/Picalexdev/sc-cargo-tracker/releases/latest",
+            headers={"User-Agent": "SC-Cargo-Tracker"},
+        )
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = _json.loads(resp.read())
+        latest = data.get("tag_name", "").lstrip("v")
+        if latest:
+            result["latest"] = latest
+            result["release_url"] = data.get("html_url")
+            result["update_available"] = _version_gt(latest, VERSION)
+    except Exception:
+        pass
+    return result
+
+def _version_gt(v1: str, v2: str) -> bool:
+    try:
+        return tuple(int(x) for x in v1.split(".")) > tuple(int(x) for x in v2.split("."))
+    except Exception:
+        return False
 
 @app.get("/api/history")
 def get_history():

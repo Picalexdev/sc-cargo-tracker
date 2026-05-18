@@ -75,6 +75,11 @@ jobs:
           if (-not $ver) { $ver = "1.0.0" }
           echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
 
+      - name: Stamp version
+        run: |
+          $ver = "${{ steps.ver.outputs.VERSION }}"
+          "VERSION = `"$ver`"" | Set-Content backend\version.py
+
       - name: Build installer
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.ver.outputs.VERSION }} setup.iss'
 

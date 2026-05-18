@@ -377,6 +377,18 @@ def end_run(entries: list[dict]) -> None:
 
 # ── history ────────────────────────────────────────────────────────────────────
 
+def reorder_materials(ids: list[int]):
+    with _conn() as con:
+        for i, mid in enumerate(ids):
+            con.execute("UPDATE materials SET sort_order = ? WHERE id = ?", (i, mid))
+
+
+def reorder_destinations(ids: list[int]):
+    with _conn() as con:
+        for i, did in enumerate(ids):
+            con.execute("UPDATE destinations SET sort_order = ? WHERE id = ?", (i, did))
+
+
 def delete_run(run_id: int):
     with _conn() as con:
         con.execute("DELETE FROM runs WHERE id = ?", (run_id,))
