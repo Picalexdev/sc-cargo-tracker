@@ -50,24 +50,6 @@ def _run_easyocr(image_bytes: bytes) -> list[tuple[str, list]]:
     return [(text, bbox) for bbox, text, conf in raw if conf > 0.3]
 
 
-def _run_paddle(image_bytes: bytes) -> list[tuple[str, list]]:
-    """PaddleOCR v2 legacy — v3 broken on Windows/oneDNN."""
-    from paddleocr import PaddleOCR
-    import numpy as np
-    from PIL import Image
-
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    arr = np.array(img)
-    ocr = PaddleOCR(use_angle_cls=True, lang="en")
-    raw = ocr.ocr(arr, cls=True)
-    lines = []
-    if raw and raw[0]:
-        for line in raw[0]:
-            if line and len(line) >= 2:
-                bbox, (text, _conf) = line[0], line[1]
-                lines.append((text, bbox))
-    return lines
-
 
 def _run_tesseract(image_bytes: bytes) -> list[tuple[str, list]]:
     import os
@@ -100,7 +82,7 @@ def _run_ocr(image_bytes: bytes) -> list[tuple[str, list]]:
     log = logging.getLogger("ocr")
     logging.basicConfig(level=logging.DEBUG)
     errors: list[str] = []
-    for backend in (_run_easyocr, _run_paddle, _run_tesseract):
+    for backend in (_run_easyocr, _run_tesseract):
         log.info("Trying backend: %s", backend.__name__)
         try:
             result = backend(image_bytes)
