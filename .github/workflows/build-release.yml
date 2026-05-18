@@ -33,11 +33,25 @@ jobs:
         run: |
           pip install pyinstaller pywebview
           pip install fastapi "uvicorn[standard]" python-multipart pydantic
-          pip install pillow rapidfuzz
-          pip install winsdk
+          pip install pillow rapidfuzz pytesseract
+
+      - name: Cache Inno Setup
+        id: cache-innosetup
+        uses: actions/cache@v4
+        with:
+          path: C:\Program Files (x86)\Inno Setup 6
+          key: innosetup-6
 
       - name: Install Inno Setup
+        if: steps.cache-innosetup.outputs.cache-hit != 'true'
         run: choco install innosetup --yes --no-progress
+
+      - name: Cache PyInstaller work directory
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: pyinstaller-${{ hashFiles('run.py', 'backend/**/*.py', '.github/workflows/build-release.yml') }}
+          restore-keys: pyinstaller-
 
       - name: Build with PyInstaller
         run: |
@@ -63,7 +77,7 @@ jobs:
             --hidden-import uvicorn.lifespan `
             --hidden-import uvicorn.lifespan.on `
             --hidden-import anyio._backends._asyncio `
-            --collect-all winsdk `
+            --hidden-import pytesseract `
             --exclude-module paddle `
             --exclude-module paddleocr `
             --exclude-module matplotlib `

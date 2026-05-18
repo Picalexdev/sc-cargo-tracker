@@ -6,7 +6,7 @@ echo.
 
 echo [1/3] Installing Python build dependencies...
 pip install pyinstaller pywebview pillow rapidfuzz fastapi "uvicorn[standard]" python-multipart pydantic --quiet
-pip install winsdk --quiet
+pip install pytesseract --quiet
 if errorlevel 1 (
   echo ERROR: pip install failed.
   pause
@@ -38,7 +38,7 @@ pyinstaller ^
   --hidden-import "uvicorn.lifespan" ^
   --hidden-import "uvicorn.lifespan.on" ^
   --hidden-import "anyio._backends._asyncio" ^
-  --collect-all "winsdk" ^
+  --hidden-import "pytesseract" ^
   --exclude-module "paddle" ^
   --exclude-module "paddleocr" ^
   --exclude-module "matplotlib" ^

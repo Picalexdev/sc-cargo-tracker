@@ -38,64 +38,39 @@ def _fuzzy_match(token: str, candidates: list[str], threshold: float = FUZZY_THR
 
 # ── OCR backends ───────────────────────────────────────────────────────────────
 
-def _run_windows_ocr(image_bytes: bytes) -> list[tuple[str, list]]:
-    import asyncio
-    from winsdk.windows.media.ocr import OcrEngine
-    from winsdk.windows.graphics.imaging import (
-        SoftwareBitmap, BitmapDecoder, BitmapPixelFormat,
-    )
-    from winsdk.windows.storage.streams import InMemoryRandomAccessStream, DataWriter
+_TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-    async def _recognize() -> list[tuple[str, list]]:
-        stream = InMemoryRandomAccessStream()
-        writer = DataWriter(stream)
-        writer.write_bytes(image_bytes)
-        await writer.store_async()
-        await writer.flush_async()
-        stream.seek(0)
 
-        decoder = await BitmapDecoder.create_async(stream)
-        bitmap = await decoder.get_software_bitmap_async()
+def _run_tesseract(image_bytes: bytes) -> list[tuple[str, list]]:
+    import os
+    import pytesseract
+    from PIL import Image
 
-        if bitmap.bitmap_pixel_format != BitmapPixelFormat.BGRA8:
-            bitmap = SoftwareBitmap.convert(bitmap, BitmapPixelFormat.BGRA8)
+    if os.path.exists(_TESSERACT_PATH):
+        pytesseract.pytesseract.tesseract_cmd = _TESSERACT_PATH
 
-        engine = OcrEngine.try_create_from_user_profile_languages()
-        if engine is None:
-            raise RuntimeError(
-                "Windows OCR engine unavailable — ensure an English language pack is installed"
-            )
+    img = Image.open(io.BytesIO(image_bytes))
+    data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, config="--psm 6")
 
-        result = await engine.recognize_async(bitmap)
-        tokens: list[tuple[str, list]] = []
-        for line in result.lines:
-            for word in line.words:
-                r = word.bounding_rect
-                bbox = [
-                    [r.x, r.y],
-                    [r.x + r.width, r.y],
-                    [r.x + r.width, r.y + r.height],
-                    [r.x, r.y + r.height],
-                ]
-                tokens.append((word.value, bbox))
-        return tokens
-
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(_recognize())
-    finally:
-        loop.close()
+    tokens: list[tuple[str, list]] = []
+    for i, text in enumerate(data["text"]):
+        text = text.strip()
+        if text and int(data["conf"][i]) > 30:
+            x, y, w, h = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
+            bbox = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]
+            tokens.append((text, bbox))
+    return tokens
 
 
 def _run_ocr(image_bytes: bytes) -> list[tuple[str, list]]:
     import logging, traceback
     log = logging.getLogger("ocr")
     try:
-        result = _run_windows_ocr(image_bytes)
-        log.info("Windows OCR succeeded, %d tokens", len(result))
+        result = _run_tesseract(image_bytes)
+        log.info("Tesseract succeeded, %d tokens", len(result))
         return result
     except Exception as exc:
-        log.error("Windows OCR failed:\n%s", traceback.format_exc())
+        log.error("Tesseract failed:\n%s", traceback.format_exc())
         raise RuntimeError(f"OCR failed: {exc}")
 
 
@@ -108,26 +83,34 @@ def _y_center(bbox: list) -> float:
     return (min(ys) + max(ys)) / 2.0
 
 
+def _x_left(bbox: list) -> float:
+    if not bbox:
+        return 0.0
+    return min(pt[0] for pt in bbox)
+
+
 def _group_rows(tokens: list[tuple[str, list]], tolerance: int = ROW_Y_TOLERANCE) -> list[list[str]]:
     if not tokens:
         return []
     sorted_tokens = sorted(tokens, key=lambda t: _y_center(t[1]))
-    rows: list[list[str]] = []
-    current_row: list[str] = []
+    rows: list[list[tuple[str, list]]] = []
+    current_row: list[tuple[str, list]] = []
     last_y: Optional[float] = None
 
     for text, bbox in sorted_tokens:
         y = _y_center(bbox)
         if last_y is None or abs(y - last_y) <= tolerance:
-            current_row.append(text)
+            current_row.append((text, bbox))
             last_y = y if last_y is None else (last_y + y) / 2
         else:
             rows.append(current_row)
-            current_row = [text]
+            current_row = [(text, bbox)]
             last_y = y
     if current_row:
         rows.append(current_row)
-    return rows
+
+    # Sort each row left-to-right by X so words appear in reading order
+    return [[t for t, _ in sorted(row, key=lambda tb: _x_left(tb[1]))] for row in rows]
 
 
 # ── mission-objectives parser ──────────────────────────────────────────────────
@@ -178,7 +161,9 @@ def _parse_mission_objectives(raw_lines: list[str]) -> list[dict]:
             mat_raw  = m.group(2).strip()
             dest_raw = m.group(3).strip().rstrip(":.")
             # Strip trailing SC location qualifiers: "on Hurston", "in Lorville", etc.
+            dest_raw = re.sub(r'[\s|•►▪*]+$', '', dest_raw)
             dest_raw = re.sub(r'\s+(?:on|in|at)\s+\w+$', '', dest_raw, flags=re.IGNORECASE)
+            dest_raw = re.sub(r'\s+(?:on|in|at)$', '', dest_raw, flags=re.IGNORECASE)
             deliveries.append({
                     "mat_name": mat_raw,
                     "dest_name": dest_raw,
@@ -245,8 +230,11 @@ def extract_data(
         "raw_lines": [str]
       }
     """
-    tokens   = _run_ocr(image_bytes)
-    raw_lines = [t for t, _ in tokens]
+    tokens = _run_ocr(image_bytes)
+    rows   = _group_rows(tokens)
+    # Join each spatial row into a single string so regex parsers see full lines
+    # (Tesseract returns one word per token; EasyOCR may return phrases — both work)
+    raw_lines = [" ".join(row) for row in rows]
 
     # ── try mission-objectives format first ────────────────────────────────────
     deliveries = _parse_mission_objectives(raw_lines)
@@ -268,7 +256,6 @@ def extract_data(
             matched_destination = m
             break
 
-    rows = _group_rows(tokens)
     result_pairs: list[dict] = []
     seen_materials: set[str] = set()
     candidate_unknowns: list[str] = []
