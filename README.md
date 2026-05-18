@@ -10,6 +10,8 @@ Or go to the [Releases page](https://github.com/Picalexdev/sc-cargo-tracker/rele
 
 **Requirements:** Windows 10/11 (64-bit). Everything else — Python, dependencies, Tesseract OCR — is bundled or installed automatically by the installer.
 
+> **Windows SmartScreen warning:** When you first run the installer, Windows may show "Windows protected your PC". Click **More info** → **Run anyway**. This is normal for unsigned community software and does not indicate any risk.
+
 ---
 
 ## Features
@@ -49,13 +51,3 @@ SC Cargo tracking/
     └── build-release.yml   Auto-builds installer on version tags
 ```
 
----
-
-## Releasing a new version
-
-```
-git tag v1.x.x
-git push origin v1.x.x
-```
-
-GitHub Actions builds the installer, stamps the version, and publishes it as a release automatically.
