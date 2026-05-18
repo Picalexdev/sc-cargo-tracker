@@ -1,59 +1,32 @@
-# SC Cargo Resource Tracker
+# SC Cargo Tracker
 
-A local-only desktop web app for tracking material quantities across Star Citizen cargo destinations.
+A Windows desktop app for tracking material quantities across Star Citizen cargo destinations.
 
-## Quick start
+## Download
 
-**Double-click `start.bat`** (Windows), or run:
+[![Download latest installer](https://img.shields.io/github/v/release/Picalexdev/sc-cargo-tracker?label=Download%20Installer&style=for-the-badge&color=4f8ef7)](https://github.com/Picalexdev/sc-cargo-tracker/releases/latest/download/SC-Cargo-Tracker-Setup.exe)
 
-```
-python start.py
-```
+Or go to the [Releases page](https://github.com/Picalexdev/sc-cargo-tracker/releases/latest) and download `SC-Cargo-Tracker-Setup.exe`.
 
-This installs dependencies automatically (first run takes a minute), starts the server on `http://localhost:8000`, and opens your browser.
-
-All data is stored in `cargo_tracking.db` in this folder — back up the whole folder to preserve your data.
-
----
-
-## Dependencies
-
-Python 3.9+ required.  
-Core packages (installed automatically by `start.py`):
-
-| Package | Purpose |
-|---|---|
-| `fastapi` | Web framework / API |
-| `uvicorn` | ASGI server |
-| `python-multipart` | File upload support |
-| `pydantic` | Request validation |
-| `rapidfuzz` | Fuzzy string matching for OCR |
-| `Pillow` | Image loading for OCR |
-
-### OCR (optional — install manually)
-
-OCR requires **one** of the following. Without it, the screenshot upload button is still shown but the server will return an error.
-
-**Option A — PaddleOCR** (better accuracy on stylised game UI):
-```
-pip install paddlepaddle paddleocr
-```
-
-**Option B — Tesseract** (simpler install):
-1. Download and install the Tesseract binary:  
-   https://github.com/UB-Mannheim/tesseract/wiki
-2. `pip install pytesseract`
+**Requirements:** Windows 10/11 (64-bit). Everything else — Python, dependencies, Tesseract OCR — is bundled or installed automatically by the installer.
 
 ---
 
 ## Features
 
-- **Materials list** — add/remove material names; each becomes a column across all destinations.
-- **Destination matrix** — editable table: click any name or quantity to edit; changes save instantly.
-- **NULL vs zero** — blank cells mean "not needed"; `0` means "zero needed". They are stored differently.
-- **Copy as Table** — copies the full matrix as tab-separated values for pasting into Excel/Sheets.
-- **Screenshot OCR** — upload a cargo/mission screenshot; the app extracts material names and quantities, shows you a preview to review and correct, then writes to the matrix only after you confirm.
-- **Fuzzy matching** — OCR errors like "Titaniun" are corrected to "Titanium" by matching against your known materials list.
+- **Material & destination matrix** — track how much of each material needs to go where
+- **Drag & drop reordering** — rearrange materials and destinations; the table updates instantly
+- **Mission cards** — add up to 10 active missions; apply partial completions (25 / 50 / 75 / 100%)
+- **Run history** — each completed run is logged with reward and delivery breakdown
+- **Screenshot OCR** — paste or upload a cargo/mission screenshot; the app reads materials and quantities and shows a review before writing anything
+- **Update notifications** — the app checks for new releases on startup and shows a banner if one is available
+- **NULL vs zero** — blank cells mean "not needed"; `0` means "needed but currently zero"
+
+---
+
+## Data
+
+All data is stored in a local SQLite database (`cargo_tracking.db`) in `%APPDATA%\SC Cargo Tracker`. Back up that file to preserve your data across reinstalls.
 
 ---
 
@@ -64,25 +37,25 @@ SC Cargo tracking/
 ├── backend/
 │   ├── main.py          FastAPI app + API endpoints
 │   ├── database.py      SQLite operations
-│   ├── ocr.py           OCR pipeline (PaddleOCR / Tesseract)
-│   └── requirements.txt
+│   ├── ocr.py           OCR pipeline (EasyOCR / Tesseract)
+│   └── version.py       VERSION constant (stamped by CI at build time)
 ├── frontend/
 │   ├── index.html
 │   ├── style.css
-│   └── app.js           Vanilla JS UI (no build step)
-├── cargo_tracking.db    Created on first run
-├── start.py             Launcher
-├── start.bat            Windows double-click launcher
-└── README.md
+│   └── app.js
+├── setup.iss            Inno Setup installer script
+├── build_installer.bat  Local build script (dev)
+└── .github/workflows/
+    └── build-release.yml   Auto-builds installer on version tags
 ```
 
 ---
 
-## Configuring OCR thresholds
+## Releasing a new version
 
-Open `backend/ocr.py` and edit the constants near the top:
-
-```python
-FUZZY_THRESHOLD: float = 72.0   # 0–100; lower = more permissive matching
-ROW_Y_TOLERANCE: int   = 18     # pixels; increase if tokens on same row aren't grouped
 ```
+git tag v1.x.x
+git push origin v1.x.x
+```
+
+GitHub Actions builds the installer, stamps the version, and publishes it as a release automatically.
