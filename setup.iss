@@ -12,7 +12,8 @@
 AppId={{B7C3A1F2-D4E5-4890-BCDE-F01234567890}
 AppName={#AppName}
 AppVersion={#AppVersion}
-AppPublisher=SC Cargo Tracker
+AppPublisher=Picalexdev
+AppPublisherURL=https://github.com/Picalexdev/sc-cargo-tracker
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 OutputDir=dist
