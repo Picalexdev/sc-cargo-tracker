@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Database (user data — not committed)
+*.db
+*.db-shm
+*.db-wal
+
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
+
+# Logs
+*.log
+ocr_err.txt
+ocr_log.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets / env
+.env
+
+# Claude Code local settings
+.claude/
