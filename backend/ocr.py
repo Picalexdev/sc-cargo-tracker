@@ -15,7 +15,7 @@ from typing import Optional
 
 # ── configurable thresholds ────────────────────────────────────────────────────
 FUZZY_THRESHOLD: float = 72.0
-ROW_Y_TOLERANCE: int   = 18
+ROW_Y_TOLERANCE: int   = 40
 
 
 # ── fuzzy matching ─────────────────────────────────────────────────────────────
@@ -50,14 +50,20 @@ def _run_tesseract(image_bytes: bytes) -> list[tuple[str, list]]:
         pytesseract.pytesseract.tesseract_cmd = _TESSERACT_PATH
 
     img = Image.open(io.BytesIO(image_bytes))
+    w, h = img.size
+    scale = max(1.0, 1920 / w)
+    if scale > 1.0:
+        img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+
     data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, config="--psm 6")
 
     tokens: list[tuple[str, list]] = []
     for i, text in enumerate(data["text"]):
         text = text.strip()
         if text and int(data["conf"][i]) > 30:
-            x, y, w, h = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
-            bbox = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]
+            x, y = data["left"][i], data["top"][i]
+            bw, bh = data["width"][i], data["height"][i]
+            bbox = [[x, y], [x + bw, y], [x + bw, y + bh], [x, y + bh]]
             tokens.append((text, bbox))
     return tokens
 
