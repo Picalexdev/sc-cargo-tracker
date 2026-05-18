@@ -41,7 +41,14 @@ def _fuzzy_match(token: str, candidates: list[str], threshold: float = FUZZY_THR
 _TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 
-def _run_tesseract(image_bytes: bytes) -> list[tuple[str, list]]:
+def _run_tesseract(image_bytes: bytes) -> tuple[list[tuple[str, list]], list[str]]:
+    """Return (tokens, raw_lines).
+
+    tokens    — (word, bbox) pairs in upscaled pixel space, for spatial analysis.
+    raw_lines — full text lines from Tesseract's own line segmentation, for regex
+                parsers.  These are immune to the Y-drift problem in _group_rows and
+                work correctly on both cropped and full-screen screenshots.
+    """
     import os
     import pytesseract
     from PIL import Image
@@ -58,23 +65,45 @@ def _run_tesseract(image_bytes: bytes) -> list[tuple[str, list]]:
     data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, config="--psm 6")
 
     tokens: list[tuple[str, list]] = []
+    # line_key → {top: int, words: [(x, text)]}
+    line_map: dict = {}
+
     for i, text in enumerate(data["text"]):
         text = text.strip()
-        if text and int(data["conf"][i]) > 30:
-            x, y = data["left"][i], data["top"][i]
-            bw, bh = data["width"][i], data["height"][i]
+        conf = int(data["conf"][i])
+        if not text:
+            continue
+        x, y = data["left"][i], data["top"][i]
+        bw, bh = data["width"][i], data["height"][i]
+
+        if conf > 30:
             bbox = [[x, y], [x + bw, y], [x + bw, y + bh], [x, y + bh]]
             tokens.append((text, bbox))
-    return tokens
+
+        if conf >= 0:
+            key = (data["block_num"][i], data["par_num"][i], data["line_num"][i])
+            if key not in line_map:
+                line_map[key] = {"top": y, "words": []}
+            line_map[key]["top"] = min(line_map[key]["top"], y)
+            line_map[key]["words"].append((x, text))
+
+    raw_lines: list[str] = []
+    for key in sorted(line_map, key=lambda k: line_map[k]["top"]):
+        words_sorted = sorted(line_map[key]["words"], key=lambda w: w[0])
+        line = " ".join(w for _, w in words_sorted if w)
+        if line:
+            raw_lines.append(line)
+
+    return tokens, raw_lines
 
 
-def _run_ocr(image_bytes: bytes) -> list[tuple[str, list]]:
+def _run_ocr(image_bytes: bytes) -> tuple[list[tuple[str, list]], list[str]]:
     import logging, traceback
     log = logging.getLogger("ocr")
     try:
-        result = _run_tesseract(image_bytes)
-        log.info("Tesseract succeeded, %d tokens", len(result))
-        return result
+        tokens, raw_lines = _run_tesseract(image_bytes)
+        log.info("Tesseract succeeded, %d tokens, %d lines", len(tokens), len(raw_lines))
+        return tokens, raw_lines
     except Exception as exc:
         log.error("Tesseract failed:\n%s", traceback.format_exc())
         raise RuntimeError(f"OCR failed: {exc}")
@@ -236,11 +265,8 @@ def extract_data(
         "raw_lines": [str]
       }
     """
-    tokens = _run_ocr(image_bytes)
-    rows   = _group_rows(tokens)
-    # Join each spatial row into a single string so regex parsers see full lines
-    # (Tesseract returns one word per token; EasyOCR may return phrases — both work)
-    raw_lines = [" ".join(row) for row in rows]
+    tokens, raw_lines = _run_ocr(image_bytes)
+    rows = _group_rows(tokens)
 
     # ── try mission-objectives format first ────────────────────────────────────
     deliveries = _parse_mission_objectives(raw_lines)
