@@ -18,6 +18,8 @@ DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 OutputDir=dist
 OutputBaseFilename=SC-Cargo-Tracker-Setup
+SetupIconFile=icon.ico
+UninstallDisplayIcon={app}\icon.ico
 Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -33,6 +35,7 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 
 [Files]
 Source: "dist\SC Cargo Tracker\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"

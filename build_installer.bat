@@ -20,6 +20,7 @@ pyinstaller ^
   --name "SC Cargo Tracker" ^
   --onedir ^
   --windowed ^
+  --icon "icon.ico" ^
   --add-data "frontend;frontend" ^
   --paths "backend" ^
   --collect-all "pywebview" ^
