@@ -80,7 +80,6 @@ def _run_tesseract(image_bytes: bytes) -> list[tuple[str, list]]:
 def _run_ocr(image_bytes: bytes) -> list[tuple[str, list]]:
     import logging, traceback
     log = logging.getLogger("ocr")
-    logging.basicConfig(level=logging.DEBUG)
     errors: list[str] = []
     for backend in (_run_easyocr, _run_tesseract):
         log.info("Trying backend: %s", backend.__name__)

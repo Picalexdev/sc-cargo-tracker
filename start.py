@@ -43,7 +43,7 @@ def main():
         pip_install()
     except subprocess.CalledProcessError:
         print("\n[WARNING] Some packages failed to install.")
-        print("OCR will not work without paddleocr or pytesseract.")
+        print("OCR will not work without pytesseract + Tesseract binary.")
         print("The rest of the app will still run fine.\n")
 
     print(f"\nStarting server at {URL} …")
