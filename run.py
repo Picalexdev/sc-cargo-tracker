@@ -8,6 +8,7 @@ browser automatically if pywebview is not installed.
 from __future__ import annotations
 
 import logging
+import os
 import queue
 import socket
 import sys
@@ -22,20 +23,24 @@ from pathlib import Path
 # Base dir: _MEIPASS when frozen, project root when running from source
 _HERE = Path(getattr(sys, "_MEIPASS", None) or Path(__file__).parent)
 
-# Log file always sits next to the .exe (or next to run.py in dev)
-_EXE_DIR = Path(sys.executable).parent if getattr(sys, "_MEIPASS", None) else Path(__file__).parent
-_LOG = _EXE_DIR / "startup.log"
+# Log file goes to %LOCALAPPDATA%\SC Cargo Tracker\ (writable even when
+# installed to Program Files).  Falls back to next to run.py in dev.
+if getattr(sys, "_MEIPASS", None):
+    _log_dir = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "SC Cargo Tracker"
+    _log_dir.mkdir(parents=True, exist_ok=True)
+    _LOG = _log_dir / "startup.log"
+else:
+    _LOG = Path(__file__).parent / "startup.log"
 
 # Add backend/ to sys.path so import main / database / ocr all resolve
 sys.path.insert(0, str(_HERE / "backend"))
 
 # In --windowed PyInstaller builds stdout/stderr are None.
 # uvicorn's logging setup calls sys.stderr.isatty() and crashes on NoneType.
-import os as _os
 if sys.stdout is None:
-    sys.stdout = open(_os.devnull, "w")
+    sys.stdout = open(os.devnull, "w")
 if sys.stderr is None:
-    sys.stderr = open(_os.devnull, "w")
+    sys.stderr = open(os.devnull, "w")
 
 # ── logging ────────────────────────────────────────────────────────────────────
 

@@ -6,7 +6,7 @@
   #define AppVersion "1.0.0"
 #endif
 #define AppExe     "SC Cargo Tracker.exe"
-#define TessURL    "https://github.com/UB-Mannheim/tesseract/releases/download/v5.5.0.20241111/tesseract-ocr-w64-setup-5.5.0.20241111.exe"
+#define TessURL    "https://github.com/UB-Mannheim/tesseract/releases/download/v5.4.0.20240606/tesseract-ocr-w64-setup-5.4.0.20240606.exe"
 
 [Setup]
 AppId={{B7C3A1F2-D4E5-4890-BCDE-F01234567890}
