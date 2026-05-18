@@ -4,11 +4,4 @@ python-multipart>=0.0.9
 pydantic>=2.0.0
 rapidfuzz>=3.0.0
 Pillow>=10.0.0
-
-# OCR — at least one backend required.
-# Option A (default, better on stylised game UI):
-easyocr>=1.7.0
-
-# Option B (smaller install, requires Tesseract binary):
-#   pip install pytesseract
-#   Download Tesseract: https://github.com/UB-Mannheim/tesseract/wiki
+winsdk>=1.0.0b10

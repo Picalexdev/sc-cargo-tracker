@@ -34,8 +34,7 @@ jobs:
           pip install pyinstaller pywebview
           pip install fastapi "uvicorn[standard]" python-multipart pydantic
           pip install pillow rapidfuzz
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install easyocr
+          pip install winsdk
 
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
@@ -64,7 +63,7 @@ jobs:
             --hidden-import uvicorn.lifespan `
             --hidden-import uvicorn.lifespan.on `
             --hidden-import anyio._backends._asyncio `
-            --collect-all easyocr `
+            --collect-all winsdk `
             --exclude-module paddle `
             --exclude-module paddleocr `
             --exclude-module matplotlib `

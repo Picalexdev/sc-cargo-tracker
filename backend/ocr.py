@@ -38,28 +38,64 @@ def _fuzzy_match(token: str, candidates: list[str], threshold: float = FUZZY_THR
 
 # ── OCR backends ───────────────────────────────────────────────────────────────
 
-def _run_easyocr(image_bytes: bytes) -> list[tuple[str, list]]:
-    import easyocr
-    import numpy as np
-    from PIL import Image
+def _run_windows_ocr(image_bytes: bytes) -> list[tuple[str, list]]:
+    import asyncio
+    from winsdk.windows.media.ocr import OcrEngine
+    from winsdk.windows.graphics.imaging import (
+        SoftwareBitmap, BitmapDecoder, BitmapPixelFormat,
+    )
+    from winsdk.windows.storage.streams import InMemoryRandomAccessStream, DataWriter
 
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    arr = np.array(img)
-    reader = easyocr.Reader(["en"], verbose=False)
-    raw = reader.readtext(arr)
-    return [(text, bbox) for bbox, text, conf in raw if conf > 0.3]
+    async def _recognize() -> list[tuple[str, list]]:
+        stream = InMemoryRandomAccessStream()
+        writer = DataWriter(stream)
+        writer.write_bytes(image_bytes)
+        await writer.store_async()
+        await writer.flush_async()
+        stream.seek(0)
 
+        decoder = await BitmapDecoder.create_async(stream)
+        bitmap = await decoder.get_software_bitmap_async()
+
+        if bitmap.bitmap_pixel_format != BitmapPixelFormat.BGRA8:
+            bitmap = SoftwareBitmap.convert(bitmap, BitmapPixelFormat.BGRA8)
+
+        engine = OcrEngine.try_create_from_user_profile_languages()
+        if engine is None:
+            raise RuntimeError(
+                "Windows OCR engine unavailable — ensure an English language pack is installed"
+            )
+
+        result = await engine.recognize_async(bitmap)
+        tokens: list[tuple[str, list]] = []
+        for line in result.lines:
+            for word in line.words:
+                r = word.bounding_rect
+                bbox = [
+                    [r.x, r.y],
+                    [r.x + r.width, r.y],
+                    [r.x + r.width, r.y + r.height],
+                    [r.x, r.y + r.height],
+                ]
+                tokens.append((word.value, bbox))
+        return tokens
+
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(_recognize())
+    finally:
+        loop.close()
 
 
 def _run_ocr(image_bytes: bytes) -> list[tuple[str, list]]:
     import logging, traceback
     log = logging.getLogger("ocr")
     try:
-        result = _run_easyocr(image_bytes)
-        log.info("EasyOCR succeeded, %d tokens", len(result))
+        result = _run_windows_ocr(image_bytes)
+        log.info("Windows OCR succeeded, %d tokens", len(result))
         return result
     except Exception as exc:
-        log.error("EasyOCR failed:\n%s", traceback.format_exc())
+        log.error("Windows OCR failed:\n%s", traceback.format_exc())
         raise RuntimeError(f"OCR failed: {exc}")
 
 
