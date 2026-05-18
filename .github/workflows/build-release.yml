@@ -22,6 +22,13 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: pip-${{ hashFiles('.github/workflows/build-release.yml') }}
+          restore-keys: pip-
+
       - name: Install build dependencies
         run: |
           pip install pyinstaller pywebview
