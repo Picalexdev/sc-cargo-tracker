@@ -53,7 +53,7 @@ logging.basicConfig(
 log = logging.getLogger("launcher")
 log.info("=== SC Cargo Tracker starting ===")
 log.info("_HERE    = %s", _HERE)
-log.info("_EXE_DIR = %s", _EXE_DIR)
+log.info("_LOG     = %s", _LOG)
 log.info("sys.executable = %s", sys.executable)
 
 
