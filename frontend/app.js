@@ -28,6 +28,7 @@ const api = {
   },
   clearMissions()                      { return this._fetch("DELETE", "/api/missions"); },
   deleteMission(id)                    { return this._fetch("DELETE", `/api/missions/${id}`); },
+  renameMission(id, name)              { return this._fetch("POST",   `/api/missions/${id}/rename`, { name }); },
   endRun(entries)                      { return this._fetch("POST",   "/api/missions/end-run", { entries }); },
   deleteRun(id)                        { return this._fetch("DELETE", `/api/runs/${id}`); },
   reorderMaterials(ids)                { return this._fetch("PUT", "/api/materials/reorder",    { ids }); },
@@ -113,7 +114,7 @@ function computeCardSources() {
       const dk = String(d.dest_id), mk = String(d.mat_id);
       if (!sources[dk]) sources[dk] = {};
       if (!sources[dk][mk]) sources[dk][mk] = [];
-      sources[dk][mk].push({ num: idx + 1, qty: Math.ceil(d.quantity * pct / 100), pct });
+      sources[dk][mk].push({ label: mission.name || `Contract ${idx + 1}`, qty: Math.ceil(d.quantity * pct / 100), pct });
     }
   });
   return sources;
@@ -139,7 +140,7 @@ function setupCellTooltip(td) {
       const row = document.createElement("div");
       row.className = "tooltip-row";
       row.innerHTML =
-        `<span class="tooltip-mission">Mission ${s.num}</span>` +
+        `<span class="tooltip-mission">${s.label}</span>` +
         (s.pct < 100 ? `<span class="tooltip-pct">${s.pct}%</span>` : "") +
         `<span class="tooltip-qty">${s.qty} SCU</span>`;
       tip.appendChild(row);
@@ -346,6 +347,26 @@ function updateMatrixFromCards() {
       td.className   = "qty-cell total-cell";
     }
   });
+
+  // update totals footer row
+  document.querySelectorAll("td[data-total-mat]").forEach(td => {
+    const matId = td.dataset.totalMat;
+    const colTotal = state.destinations.reduce((sum, dest) => {
+      const qty = matrix[dest.id]?.[matId];
+      return qty != null ? sum + qty : sum;
+    }, 0);
+    td.textContent = colTotal || "—";
+    td.className   = "qty-cell totals-cell" + (colTotal ? "" : " is-null");
+  });
+  const grandTd = document.getElementById("grand-total-cell");
+  if (grandTd) {
+    const grand = state.destinations.reduce((sum, dest) => {
+      const destMats = matrix[dest.id];
+      return destMats ? sum + Object.values(destMats).reduce((s, q) => s + q, 0) : sum;
+    }, 0);
+    grandTd.textContent = grand || "—";
+    grandTd.className   = "qty-cell totals-cell total-cell" + (grand ? "" : " is-null");
+  }
 }
 
 function buildTable() {
@@ -368,6 +389,35 @@ function buildTable() {
   const tbody = el("tbody");
   for (const dest of state.destinations) tbody.appendChild(buildDestRow(dest, cardMatrix));
   table.appendChild(tbody);
+
+  const tfoot = el("tfoot");
+  const footRow = el("tr", { className: "totals-row" });
+  footRow.appendChild(el("td", { className: "totals-label" }, [text("Total")]));
+  for (const mat of state.materials) {
+    const colTotal = state.destinations.reduce((sum, dest) => {
+      const qty = cardMatrix[dest.id]?.[mat.id];
+      return qty != null ? sum + qty : sum;
+    }, 0);
+    const td = el("td", {
+      className: "qty-cell totals-cell" + (colTotal ? "" : " is-null"),
+      "data-total-mat": String(mat.id),
+    });
+    td.textContent = colTotal || "—";
+    footRow.appendChild(td);
+  }
+  const grandTotal = state.destinations.reduce((sum, dest) => {
+    const destMats = cardMatrix[dest.id];
+    return destMats ? sum + Object.values(destMats).reduce((s, q) => s + q, 0) : sum;
+  }, 0);
+  const grandTd = el("td", {
+    className: "qty-cell totals-cell total-cell" + (grandTotal ? "" : " is-null"),
+    id: "grand-total-cell",
+  });
+  grandTd.textContent = grandTotal || "—";
+  footRow.appendChild(grandTd);
+  tfoot.appendChild(footRow);
+  table.appendChild(tfoot);
+
   return table;
 }
 
@@ -413,10 +463,11 @@ function buildMissionsSection() {
   const headRow = el("div", { style: "display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:.75rem;flex-wrap:wrap;" });
 
   const titleWrap = el("div", { style: "display:flex;align-items:center;gap:.6rem;" });
-  const h2 = el("h2", { style: "margin-bottom:0;" }, [text("Active Missions")]);
+  const h2 = el("h2", { style: "margin-bottom:0;" }, [text("Active Contracts")]);
   const badge = el("span", {
     style: `background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:.1rem .55rem;font-size:.75rem;color:var(--text-muted);font-weight:600;`,
   }, [text(`${state.missions.length} / 10`)]);
+
   titleWrap.appendChild(h2);
   titleWrap.appendChild(badge);
   headRow.appendChild(titleWrap);
@@ -443,7 +494,7 @@ function buildMissionsSection() {
 
   if (state.missions.length === 0) {
     section.appendChild(el("p", { className: "missions-empty" }, [
-      text("No active missions. Paste a mission screenshot (Ctrl+V) to add a card."),
+      text("No active contracts. Paste a screenshot (Ctrl+V) to add one."),
     ]));
     return section;
   }
@@ -464,7 +515,27 @@ function buildMissionCard(mission, num) {
   const header = el("div", { className: "mission-card-header" });
 
   const titleEl = el("div", { style: "display:flex;flex-direction:column;gap:.1rem;" });
-  titleEl.appendChild(el("div", { className: "mission-card-title" }, [text(`Mission ${num}`)]));
+  const defaultName = `Contract ${num}`;
+  const titleInput = el("input", {
+    type: "text",
+    className: "mission-card-title-input",
+    value: mission.name || defaultName,
+    placeholder: defaultName,
+    title: "Click to rename",
+  });
+  titleInput.onblur = async () => {
+    const name = titleInput.value.trim() || null;
+    titleInput.value = name || defaultName;
+    if ((name || null) !== (mission.name || null)) {
+      mission.name = name;
+      try { await api.renameMission(mission.id, name); } catch (e) { flashError(e.message); }
+    }
+  };
+  titleInput.onkeydown = (e) => {
+    if (e.key === "Enter")  { titleInput.blur(); }
+    if (e.key === "Escape") { titleInput.value = mission.name || defaultName; titleInput.blur(); }
+  };
+  titleEl.appendChild(titleInput);
 
   const removeBtn = el("button", {
     className: "btn-danger",
@@ -584,18 +655,15 @@ function buildMissionCard(mission, num) {
   scuItem.appendChild(text(" SCU total"));
   sumDiv.appendChild(scuItem);
 
-  if (uniqueDests > 0) {
-    const stopItem = el("div", { className: "sum-item" });
-    stopItem.appendChild(el("strong", {}, [text(String(uniqueDests))]));
-    stopItem.appendChild(text(` stop${uniqueDests !== 1 ? "s" : ""}`));
-    sumDiv.appendChild(stopItem);
-  }
   card.appendChild(sumDiv);
 
   // ── completion % selector ──
+  const compWrap = el("div", { className: "completion-wrap" });
+  compWrap.appendChild(el("div", { className: "completion-label" }, [text("Cargo delivered:")]));
   const compRow = el("div", { className: "completion-row" });
   for (const p of [25, 50, 75, 100]) {
-    const btn = el("button", { className: "pct-btn" + (pct === p ? " active" : "") }, [text(`${p}%`)]);
+    const label = p === 100 ? "Full" : `${p}%`;
+    const btn = el("button", { className: "pct-btn" + (pct === p ? " active" : "") }, [text(label)]);
     btn.onclick = () => {
       state.missionPcts[mission.id] = p;
       card.querySelectorAll(".pct-btn").forEach(b => b.classList.remove("active"));
@@ -607,7 +675,8 @@ function buildMissionCard(mission, num) {
     };
     compRow.appendChild(btn);
   }
-  card.appendChild(compRow);
+  compWrap.appendChild(compRow);
+  card.appendChild(compWrap);
 
   return card;
 }
@@ -621,10 +690,10 @@ async function handleEndRun() {
     const pct = state.missionPcts[m.id] ?? 100;
     const reward = m.reward ? ` · ${Math.ceil(m.reward * pct / 100).toLocaleString()} aUEC` : "";
     const scu    = m.deliveries.reduce((acc, d) => acc + Math.ceil(d.quantity * pct / 100), 0);
-    return `  Mission ${i + 1}: ${pct}%${reward} · ${scu} SCU`;
+    return `  Contract ${i + 1}: ${pct}% loaded${reward} · ${scu} SCU`;
   });
 
-  if (!confirm(`End run and apply ${state.missions.length} mission(s)?\n\n${lines.join("\n")}\n\nThis will add quantities to the matrix and remove all cards.`)) return;
+  if (!confirm(`End run and apply ${state.missions.length} contract(s)?\n\n${lines.join("\n")}\n\nThis will add quantities to the matrix and remove all cards.`)) return;
 
   const entries = state.missions.map(m => ({
     mission_id:     m.id,
@@ -644,7 +713,7 @@ async function handleEndRun() {
 
 async function handleCancelRun() {
   if (state.missions.length === 0) return;
-  if (!confirm(`Cancel run and discard all ${state.missions.length} mission card(s)?\n\nThis will NOT update the matrix or save any history.`)) return;
+  if (!confirm(`Cancel run and discard all ${state.missions.length} contract(s)?\n\nThis will NOT update the matrix or save any history.`)) return;
   try {
     await api.clearMissions();
     state.missionPcts = {};
@@ -663,16 +732,16 @@ async function removeMissionCard(id) {
   } catch (e) { flashError(e.message); }
 }
 
-// ── OCR section ────────────────────────────────────────────────────────────────
+// ── Add Contract section ───────────────────────────────────────────────────────
 
 function buildOCRSection() {
   const section = el("section");
-  section.appendChild(el("h2", {}, [text("Screenshot OCR")]));
+  section.appendChild(el("h2", {}, [text("Add Contract")]));
 
   if (state.ocrBusy) {
     const busy = el("div", { className: "ocr-busy" });
     busy.appendChild(el("div", { className: "spinner" }));
-    busy.appendChild(text("Running OCR — this may take a moment on first use…"));
+    busy.appendChild(text("Reading screenshot…"));
     section.appendChild(busy);
     return section;
   }
@@ -680,7 +749,7 @@ function buildOCRSection() {
   const pasteBtn = el("button", {
     className: "btn-primary",
     "data-paste-btn": "1",
-  }, [text("Paste from Clipboard")]);
+  }, [text("Paste Screenshot")]);
   pasteBtn.onclick = pasteFromClipboard;
   section.appendChild(pasteBtn);
 
@@ -745,7 +814,7 @@ async function processOCRFile(file) {
   try {
     result = await api.ocrImage(file);
   } catch (e) {
-    state.ocrBusy = false; state.error = `OCR failed: ${e.message}`; render(); return;
+    state.ocrBusy = false; state.error = `Could not read screenshot: ${e.message}`; render(); return;
   }
   state.ocrBusy = false; render();
 
@@ -790,7 +859,7 @@ function showMissionModal(result) {
   const modal = el("div", { className: "modal" });
 
   const mh = el("div", { className: "modal-header" });
-  mh.appendChild(el("h3", {}, [text("Mission Detected")]));
+  mh.appendChild(el("h3", {}, [text("Contract Detected")]));
   const closeBtn = el("button", { className: "modal-close" }, [text("×")]);
   closeBtn.onclick = closeModal;
   mh.appendChild(closeBtn);
@@ -868,7 +937,7 @@ function showMissionModal(result) {
 
   if (result.raw_lines?.length) {
     const det = el("details", { className: "raw-lines-details" });
-    det.appendChild(el("summary", {}, [text(`Raw OCR (${result.raw_lines.length} tokens)`)]));
+    det.appendChild(el("summary", {}, [text(`Raw text (${result.raw_lines.length} lines)`)]));
     const pre = el("pre"); pre.textContent = result.raw_lines.join("\n");
     det.appendChild(pre);
     body.appendChild(det);
@@ -887,7 +956,7 @@ function showMissionModal(result) {
   const cancelBtn = el("button", { className: "btn-ghost" }, [text("Cancel")]);
   cancelBtn.onclick = closeModal;
 
-  const saveBtn = el("button", { className: "btn-primary" }, [text(duplicate ? "Save Anyway" : "Save as Mission Card")]);
+  const saveBtn = el("button", { className: "btn-primary" }, [text(duplicate ? "Add Anyway" : "Add Contract")]);
   saveBtn.onclick = async () => {
     if (state.missions.length >= 10) { flashError("Maximum of 10 mission cards reached."); return; }
     saveBtn.disabled = true; saveBtn.textContent = "Saving…";
@@ -936,7 +1005,7 @@ function showMissionModal(result) {
       await reload();
     } catch (e) {
       flashError(e.message);
-      saveBtn.disabled = false; saveBtn.textContent = "Save as Mission Card";
+      saveBtn.disabled = false; saveBtn.textContent = "Add Contract";
     }
   };
   footer.appendChild(cancelBtn);
@@ -957,7 +1026,7 @@ function showManifestModal(result) {
   const modal = el("div", { className: "modal" });
 
   const mh = el("div", { className: "modal-header" });
-  mh.appendChild(el("h3", {}, [text("Cargo Manifest — OCR Review")]));
+  mh.appendChild(el("h3", {}, [text("Cargo Manifest — Review")]));
   const closeBtn = el("button", { className: "modal-close" }, [text("×")]);
   closeBtn.onclick = closeModal;
   mh.appendChild(closeBtn);
@@ -1030,7 +1099,7 @@ function showManifestModal(result) {
 
   if (result.raw_lines?.length) {
     const det = el("details", { className: "raw-lines-details" });
-    det.appendChild(el("summary", {}, [text(`Raw OCR (${result.raw_lines.length} tokens)`)]));
+    det.appendChild(el("summary", {}, [text(`Raw text (${result.raw_lines.length} lines)`)]));
     const pre = el("pre"); pre.textContent = result.raw_lines.join("\n");
     det.appendChild(pre);
     body.appendChild(det);
@@ -1042,7 +1111,7 @@ function showManifestModal(result) {
   const cancelBtn = el("button", { className: "btn-ghost" }, [text("Cancel")]);
   cancelBtn.onclick = closeModal;
 
-  const applyBtn = el("button", { className: "btn-primary" }, [text("Apply to Matrix")]);
+  const applyBtn = el("button", { className: "btn-primary" }, [text("Save to Tracker")]);
   applyBtn.onclick = async () => {
     const destId = parseInt(destSelect.value, 10);
     if (!destId) { destSelect.style.borderColor = "var(--danger)"; destSelect.focus(); return; }
@@ -1061,7 +1130,7 @@ function showManifestModal(result) {
       closeModal(); await reload();
     } catch (e) {
       flashError(e.message);
-      applyBtn.disabled = false; applyBtn.textContent = "Apply to Matrix";
+      applyBtn.disabled = false; applyBtn.textContent = "Save to Tracker";
     }
   };
 
@@ -1211,7 +1280,7 @@ function buildRunMissionItem(m, num) {
   const item = el("div", { className: "run-mission-item" });
 
   const header = el("div", { className: "run-mission-header" });
-  header.appendChild(el("span", { className: "run-mission-num" }, [text(`Mission ${num}`)]));
+  header.appendChild(el("span", { className: "run-mission-num" }, [text(`Contract ${num}`)]));
 
   const badge = el("span", { className: "pct-badge" + (m.completion_pct === 100 ? " full" : "") },
     [text(`${m.completion_pct}%`)]);
@@ -1332,7 +1401,7 @@ function buildAliasesSection() {
 
   section.appendChild(el("h2", {}, [text("Aliases")]));
   section.appendChild(el("p", { className: "section-subtitle" }, [
-    text("OCR substring → destination mappings"),
+    text("Shortcut text → destination"),
   ]));
 
   if (state.aliases.length > 0) {

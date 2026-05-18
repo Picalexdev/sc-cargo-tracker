@@ -92,6 +92,7 @@ def init_db():
         # safe migration for DBs created before these columns existed
         _add_col(con, "missions", "contracted_by",   "TEXT")
         _add_col(con, "missions", "pickup_location",  "TEXT")
+        _add_col(con, "missions", "name",             "TEXT")
 
         # ── history tables ───────────────────────────────────────────────────
         con.executescript("""
@@ -239,7 +240,7 @@ def set_quantity(dest_id: int, mat_id: int, quantity: Optional[int]):
 
 def get_missions() -> list[dict]:
     with _conn() as con:
-        missions   = [dict(r) for r in con.execute("SELECT id, reward, contracted_by, pickup_location FROM missions ORDER BY sort_order, id")]
+        missions   = [dict(r) for r in con.execute("SELECT id, name, reward, contracted_by, pickup_location FROM missions ORDER BY sort_order, id")]
         deliveries = [dict(r) for r in con.execute("SELECT id, mission_id, mat_name, mat_id, dest_name, dest_id, quantity FROM mission_deliveries ORDER BY id")]
     by_mission: dict[int, list] = {}
     for d in deliveries:
@@ -268,6 +269,11 @@ def create_mission(reward: Optional[int], deliveries: list[dict],
             "SELECT id, mission_id, mat_name, mat_id, dest_name, dest_id, quantity FROM mission_deliveries WHERE mission_id = ? ORDER BY id", (mid,)
         )]
         return {"id": mid, "reward": reward, "contracted_by": contracted_by, "pickup_location": pickup_location, "deliveries": rows}
+
+
+def rename_mission(mission_id: int, name: Optional[str]):
+    with _conn() as con:
+        con.execute("UPDATE missions SET name = ? WHERE id = ?", (name, mission_id))
 
 
 def delete_mission(mission_id: int):

@@ -180,6 +180,10 @@ thead th.col-total {
 
 .qty-cell.total-cell { border-left: 2px solid var(--border2); color: var(--amber); }
 
+.totals-row td { border-top: 2px solid var(--border2); padding: .45rem .6rem; vertical-align: middle; }
+.totals-label { padding: .45rem .75rem; font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); text-align: left; }
+.qty-cell.totals-cell { font-weight: 700; color: var(--amber); }
+
 tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
 tbody tr:last-child { border-bottom: none; }
 tbody tr:hover { background: var(--surface2); }
@@ -453,6 +457,27 @@ tbody td.cell-dest:hover {
   color: var(--text-muted);
 }
 
+.mission-card-title-input {
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .03em;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed transparent;
+  outline: none;
+  padding: 0;
+  width: 100%;
+  cursor: pointer;
+  font-family: inherit;
+}
+.mission-card-title-input:hover,
+.mission-card-title-input:focus {
+  border-bottom-color: var(--border);
+  cursor: text;
+  color: var(--text);
+}
+
 .mission-reward {
   text-align: right;
 }
@@ -525,13 +550,23 @@ tbody td.cell-dest:hover {
 }
 
 /* completion selector */
-.completion-row {
-  display: flex;
-  gap: .35rem;
-  padding: .6rem 1rem;
+.completion-wrap {
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   background: var(--bg);
+}
+.completion-label {
+  font-size: .7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+  padding: .4rem 1rem .1rem;
+}
+.completion-row {
+  display: flex;
+  gap: .35rem;
+  padding: .3rem 1rem .55rem;
 }
 
 .pct-btn {

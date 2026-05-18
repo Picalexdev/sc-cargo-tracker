@@ -6,17 +6,31 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+import logging
+
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
 
 import database
 import ocr
 from version import VERSION
 
+logging.basicConfig(level=logging.DEBUG, format="%(levelname)s %(name)s: %(message)s")
+_log = logging.getLogger("main")
+
 app = FastAPI(title="SC Cargo Resource Tracker")
 
+class _RequestLogger(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        _log.debug("→ %s %s", request.method, request.url.path)
+        response = await call_next(request)
+        _log.debug("← %s %s %s", request.method, request.url.path, response.status_code)
+        return response
+
+app.add_middleware(_RequestLogger)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -68,6 +82,9 @@ class ReorderRequest(BaseModel):
 class AliasCreate(BaseModel):
     alias: str
     dest_id: int
+
+class MissionRename(BaseModel):
+    name: Optional[str] = None
 
 
 # ── matrix ─────────────────────────────────────────────────────────────────────
@@ -181,6 +198,11 @@ def create_mission(data: MissionCreate):
 @app.delete("/api/missions")
 def clear_missions():
     database.clear_missions()
+    return {"ok": True}
+
+@app.post("/api/missions/{mission_id}/rename")
+def rename_mission(mission_id: int, data: MissionRename):
+    database.rename_mission(mission_id, data.name.strip() if data.name else None)
     return {"ok": True}
 
 @app.delete("/api/missions/{mission_id}")
@@ -363,4 +385,10 @@ def _best_dest_match(dest_phrase: str, by_name: dict, aliases: Optional[list] = 
 # When bundled by PyInstaller, frontend/ is extracted to sys._MEIPASS/frontend/
 _BASE = Path(getattr(sys, "_MEIPASS", None) or Path(__file__).parent.parent)
 _FRONTEND = _BASE / "frontend"
+
+_log.info("Registered routes:")
+for r in app.routes:
+    methods = getattr(r, "methods", None)
+    _log.info("  %-30s %s", getattr(r, "path", "?"), methods or "(mount)")
+
 app.mount("/", StaticFiles(directory=str(_FRONTEND), html=True), name="static")
