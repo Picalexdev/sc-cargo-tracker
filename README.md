@@ -4,7 +4,7 @@ A Windows desktop app for tracking material quantities across Star Citizen cargo
 
 ## Download
 
-[![Download latest installer](https://img.shields.io/github/v/release/Picalexdev/sc-cargo-tracker?label=Download%20Installer&style=for-the-badge&color=4f8ef7)](https://github.com/Picalexdev/sc-cargo-tracker/releases/latest/download/SC-Cargo-Tracker-Setup.exe)
+[![Download latest installer](https://img.shields.io/github/v/release/Picalexdev/sc-cargo-tracker?label=Download%20Installer&style=for-the-badge&color=4f8ef7&cacheSeconds=300)](https://github.com/Picalexdev/sc-cargo-tracker/releases/latest/download/SC-Cargo-Tracker-Setup.exe)
 
 Or go to the [Releases page](https://github.com/Picalexdev/sc-cargo-tracker/releases/latest) and download `SC-Cargo-Tracker-Setup.exe`.
 
