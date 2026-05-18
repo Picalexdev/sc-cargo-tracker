@@ -51,55 +51,16 @@ def _run_easyocr(image_bytes: bytes) -> list[tuple[str, list]]:
 
 
 
-def _run_tesseract(image_bytes: bytes) -> list[tuple[str, list]]:
-    import os
-    import pytesseract
-    from PIL import Image
-
-    # On Windows set the tesseract binary path explicitly (UB-Mannheim default install).
-    if os.name == "nt":
-        for _p in [
-            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-        ]:
-            if os.path.exists(_p):
-                pytesseract.pytesseract.tesseract_cmd = _p
-                break
-
-    img = Image.open(io.BytesIO(image_bytes))
-    data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
-    lines = []
-    for i, text in enumerate(data["text"]):
-        if text.strip() and int(data["conf"][i]) > 30:
-            x, y, w, h = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
-            bbox = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]
-            lines.append((text.strip(), bbox))
-    return lines
-
-
 def _run_ocr(image_bytes: bytes) -> list[tuple[str, list]]:
     import logging, traceback
     log = logging.getLogger("ocr")
-    errors: list[str] = []
-    for backend in (_run_easyocr, _run_tesseract):
-        log.info("Trying backend: %s", backend.__name__)
-        try:
-            result = backend(image_bytes)
-            log.info("Backend %s succeeded, %d tokens", backend.__name__, len(result))
-            return result
-        except ImportError as exc:
-            log.info("Backend %s not installed: %s", backend.__name__, exc)
-            continue
-        except Exception as exc:
-            log.error("Backend %s failed:\n%s", backend.__name__, traceback.format_exc())
-            errors.append(f"{backend.__name__}: {exc}")
-            continue
-    if errors:
-        raise RuntimeError("All OCR backends failed — " + "; ".join(errors))
-    raise RuntimeError(
-        "No OCR backend available. "
-        "Install easyocr, or pytesseract + Tesseract binary."
-    )
+    try:
+        result = _run_easyocr(image_bytes)
+        log.info("EasyOCR succeeded, %d tokens", len(result))
+        return result
+    except Exception as exc:
+        log.error("EasyOCR failed:\n%s", traceback.format_exc())
+        raise RuntimeError(f"OCR failed: {exc}")
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────

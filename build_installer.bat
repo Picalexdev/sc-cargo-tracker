@@ -5,7 +5,9 @@ echo ============================================================
 echo.
 
 echo [1/3] Installing Python build dependencies...
-pip install pyinstaller pywebview pytesseract pillow rapidfuzz fastapi "uvicorn[standard]" python-multipart pydantic --quiet
+pip install pyinstaller pywebview pillow rapidfuzz fastapi "uvicorn[standard]" python-multipart pydantic --quiet
+pip install torch --index-url https://download.pytorch.org/whl/cpu --quiet
+pip install easyocr --quiet
 if errorlevel 1 (
   echo ERROR: pip install failed.
   pause
@@ -37,14 +39,9 @@ pyinstaller ^
   --hidden-import "uvicorn.lifespan" ^
   --hidden-import "uvicorn.lifespan.on" ^
   --hidden-import "anyio._backends._asyncio" ^
-  --hidden-import "pytesseract" ^
-  --exclude-module "torch" ^
-  --exclude-module "torchvision" ^
-  --exclude-module "torchaudio" ^
-  --exclude-module "easyocr" ^
+  --collect-all "easyocr" ^
   --exclude-module "paddle" ^
   --exclude-module "paddleocr" ^
-  --exclude-module "cv2" ^
   --exclude-module "matplotlib" ^
   --exclude-module "scipy" ^
   --exclude-module "sklearn" ^
