@@ -40,14 +40,22 @@ SC Cargo tracking/
 │   ├── main.py          FastAPI app + API endpoints
 │   ├── database.py      SQLite operations
 │   ├── ocr.py           OCR pipeline (EasyOCR / Tesseract)
-│   └── version.py       VERSION constant (stamped by CI at build time)
+│   └── version.py       VERSION constant (stamped by publicar.bat)
 ├── frontend/
 │   ├── index.html
 │   ├── style.css
 │   └── app.js
 ├── setup.iss            Inno Setup installer script
-├── build_installer.bat  Local build script (dev)
-└── .github/workflows/
-    └── build-release.yml   Auto-builds installer on version tags
+├── build_installer.bat  Builds the installer locally
+└── publicar.bat         Builds the installer and publishes the GitHub release
 ```
 
+## Releasing
+
+Releases are built on a Windows PC, not in CI. With Python, Inno Setup 6 and the GitHub CLI signed in, run from the repo root:
+
+```bat
+publicar.bat v1.2.0
+```
+
+It writes the version to `backend/version.py` (and commits it if it changed), builds the installer, pushes, and creates the release with `SC-Cargo-Tracker-Setup.exe` attached and generated notes.
