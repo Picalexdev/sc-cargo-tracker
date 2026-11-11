@@ -1,4 +1,9 @@
 @echo off
+rem Optional argument: the version to stamp in the installer (publicar.bat passes it).
+rem With it, the script does not stop to wait for a key.
+set "APPVER=%~1"
+set "PAUSA=pause"
+if not "%APPVER%"=="" set "PAUSA=rem"
 echo ============================================================
 echo  SC Cargo Tracker - Build Installer
 echo ============================================================
@@ -9,7 +14,7 @@ pip install pyinstaller pywebview pillow rapidfuzz fastapi "uvicorn[standard]" p
 pip install pytesseract --quiet
 if errorlevel 1 (
   echo ERROR: pip install failed.
-  pause
+  %PAUSA%
   exit /b 1
 )
 echo Done.
@@ -49,18 +54,22 @@ pyinstaller ^
 if not exist "dist\SC Cargo Tracker\SC Cargo Tracker.exe" (
   echo.
   echo ERROR: PyInstaller build failed. Check output above.
-  pause
+  %PAUSA%
   exit /b 1
 )
 echo PyInstaller build complete.
 echo.
 
 echo [3/3] Building installer with Inno Setup...
-"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss
+if "%APPVER%"=="" (
+  "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss
+) else (
+  "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=%APPVER% setup.iss
+)
 if errorlevel 1 (
   echo.
   echo ERROR: Inno Setup failed. Check output above.
-  pause
+  %PAUSA%
   exit /b 1
 )
 
@@ -76,4 +85,4 @@ if exist "dist\SC-Cargo-Tracker-Setup.exe" (
   echo ERROR: Installer was not created. Check output above.
 )
 echo.
-pause
+%PAUSA%
